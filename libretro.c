@@ -63,6 +63,8 @@ u32 iwram_stack_optimize = 1;
 u32 translation_gate_target_pc[MAX_TRANSLATION_GATES];
 u32 translation_gate_targets = 0;
 
+char savestate_filename[512];
+
 void switch_to_main_thread(void)
 {
    co_switch(main_thread);
@@ -507,6 +509,39 @@ bool retro_load_game(const struct retro_game_info* info)
 
    init_context_switch();
 
+   // Create the savestate file name
+   char * p = strrchr(gamepak_filename, PATH_SEPARATOR_CHAR);
+   if (p)
+   {
+     p++;
+   }
+   else
+   {
+     p = gamepak_filename;
+   }
+   snprintf(savestate_filename, sizeof(savestate_filename), "%s/%s", save_path, p);
+   p = strrchr(savestate_filename, '.');
+   if (p)
+   {
+     strcpy(p, ".savestate");
+   }
+
+   // Open a file pointer to the savestate
+   FILE * savestateFile = fopen(savestate_filename, "rb");
+   if(NULL != savestateFile)
+   {
+     // If it exists, read it
+     uint8_t data[GBA_STATE_MEM_SIZE] = {0};
+     size_t bytesRead = fread(data, sizeof(uint8_t), GBA_STATE_MEM_SIZE, savestateFile);
+     fclose(savestateFile);
+
+     // If the correct number of bytes were read, load it
+     if (bytesRead == GBA_STATE_MEM_SIZE)
+     {
+       gba_load_state(data);
+     }
+   }
+
    return true;
 }
 
@@ -519,6 +554,20 @@ bool retro_load_game_special(unsigned game_type,
 
 void retro_unload_game(void)
 {
+   // Open up the savestate file for writing
+   FILE * savestateFile = fopen(savestate_filename, "wb");
+   if(NULL != savestateFile)
+   {
+      // Save the game state into data
+      uint8_t data[GBA_STATE_MEM_SIZE];
+      memset (data,0, GBA_STATE_MEM_SIZE);
+      gba_save_state(data);
+
+      // Write the game state to a file
+      fwrite(data, sizeof(uint8_t), GBA_STATE_MEM_SIZE, savestateFile);
+      fclose(savestateFile);
+   }
+
    deinit_context_switch();
    update_backup();
 }
