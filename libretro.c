@@ -416,6 +416,8 @@ static void set_input_descriptors()
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,     "A" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT,   "Select" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START,    "Start" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L, "L" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R, "R" },
       { 0 },
    };
 
@@ -579,6 +581,8 @@ unsigned retro_get_region(void)
 
 void* retro_get_memory_data(unsigned id)
 {
+   if ( id == RETRO_MEMORY_SYSTEM_RAM )
+      return ewram ;
    //   switch (id)
    //   {
    //   case RETRO_MEMORY_SAVE_RAM:
@@ -590,7 +594,10 @@ void* retro_get_memory_data(unsigned id)
 
 size_t retro_get_memory_size(unsigned id)
 {
-   //   switch (id)
+
+   if ( id == RETRO_MEMORY_SYSTEM_RAM )
+      return 1024 * 256 * 2 ;
+  //   switch (id)
    //   {
    //   case RETRO_MEMORY_SAVE_RAM:
    //      switch(backup_type)
@@ -619,11 +626,11 @@ void retro_run(void)
 {
    bool updated = false;
 
+   update_input();
+
    input_poll_cb();
 
    switch_to_cpu_thread();
-
-   update_input();
 
    render_audio();
 

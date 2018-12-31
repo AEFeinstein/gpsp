@@ -1,48 +1,39 @@
 LOCAL_PATH := $(call my-dir)
 
-include $(CLEAR_VARS)
+CORE_DIR     := $(LOCAL_PATH)/..
 
-GIT_VERSION := " $(shell git rev-parse --short HEAD || echo unknown)"
-ifneq ($(GIT_VERSION)," unknown")
-	LOCAL_CFLAGS += -DGIT_VERSION=\"$(GIT_VERSION)\"
-endif
+CORE_LDLIBS  :=
+CPU_ARCH     :=
+HAVE_DYNAREC :=
 
-LOCAL_MODULE    := retro
-CPU_ARCH        :=
+COREFLAGS := -DINLINE=inline -D__LIBRETRO__ -DFRONTEND_SUPPORTS_RGB565
 
 ifeq ($(TARGET_ARCH),arm)
-LOCAL_CFLAGS += -DANDROID_ARM -DARM_ARCH -DARM_MEMORY_DYNAREC
-LOCAL_ARM_MODE := arm
-CPU_ARCH := arm
-HAVE_DYNAREC := 1
+   COREFLAGS += -DARM_ARCH -DARM_MEMORY_DYNAREC
+   CPU_ARCH := arm
+   HAVE_DYNAREC := 1
+else ifeq ($(TARGET_ARCH),x86)
+   COREFLAGS += -DHAVE_MMAP
+   CPU_ARCH := x86_32
+   HAVE_DYNAREC := 1
 endif
-
-ifeq ($(TARGET_ARCH),x86)
-LOCAL_CFLAGS +=  -DANDROID_X86 -DHAVE_MMAP
-CPU_ARCH := x86_32
-HAVE_DYNAREC := 1
-endif
-
-#ifeq ($(TARGET_ARCH),mips)
-#LOCAL_CFLAGS += -DANDROID_MIPS -D__mips__ -D__MIPSEL__
-#endif
-
-CORE_DIR := ..
-
-SOURCES_C   :=
-SOURCES_ASM :=
 
 ifeq ($(HAVE_DYNAREC),1)
-LOCAL_CFLAGS += -DHAVE_DYNAREC
-endif
-
-ifeq ($(CPU_ARCH),arm)
-LOCAL_CFLAGS  += -DARM_ARCH
+  COREFLAGS += -DHAVE_DYNAREC
+  CORE_LDLIBS += -Wl,--no-warn-shared-textrel
 endif
 
 include $(CORE_DIR)/Makefile.common
 
-LOCAL_SRC_FILES := $(SOURCES_C) $(SOURCES_ASM)
-LOCAL_CFLAGS += -O2 -DNDEBUG -DINLINE=inline -D__LIBRETRO__ -DFRONTEND_SUPPORTS_RGB565 $(INCFLAGS)
+GIT_VERSION := " $(shell git rev-parse --short HEAD || echo unknown)"
+ifneq ($(GIT_VERSION)," unknown")
+   COREFLAGS += -DGIT_VERSION=\"$(GIT_VERSION)\"
+endif
 
+include $(CLEAR_VARS)
+LOCAL_MODULE    := retro
+LOCAL_SRC_FILES := $(SOURCES_C) $(SOURCES_ASM)
+LOCAL_CFLAGS    := $(COREFLAGS) $(INCFLAGS)
+LOCAL_LDFLAGS   := -Wl,-version-script=$(CORE_DIR)/link.T
+LOCAL_LDLIBS    := $(CORE_LDLIBS)
 include $(BUILD_SHARED_LIBRARY)

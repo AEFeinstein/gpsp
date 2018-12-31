@@ -126,9 +126,13 @@ else ifneq (,$(findstring ios,$(platform)))
 		IOSSDK := $(shell xcodebuild -version -sdk iphoneos Path)
 	endif
 
-	CC = cc -arch armv7 -isysroot $(IOSSDK)
+	ifeq ($(platform),ios-arm64)
+		CC = cc -arch arm64 -isysroot $(IOSSDK)
+	else
+		CC = cc -arch armv7 -isysroot $(IOSSDK)
+	endif
 	CFLAGS += -DIOS -DHAVE_POSIX_MEMALIGN -marm
-ifeq ($(platform),ios9)
+ifeq ($(platform),$(filter $(platform),ios9 ios-arm64))
 	CC += -miphoneos-version-min=8.0
 	CFLAGS += -miphoneos-version-min=8.0
 else
@@ -185,6 +189,13 @@ else ifeq ($(platform), psl1ght)
 	AR = $(PS3DEV)/ppu/bin/ppu-ar$(EXE_EXT)
 	CFLAGS += -DMSB_FIRST -D__ppc__
 	STATIC_LINKING = 1
+	
+# Nintendo Switch (libtransistor)
+else ifeq ($(platform), switch)
+	EXT=a
+        TARGET := $(TARGET_NAME)_libretro_$(platform).$(EXT)
+        include $(LIBTRANSISTOR_HOME)/libtransistor.mk
+        STATIC_LINKING=1
 
 # PSP
 else ifeq ($(platform), psp1)
@@ -264,6 +275,45 @@ else ifeq ($(platform), rpi1)
 	CXXFLAGS = $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
 	CPU_ARCH := arm
 	HAVE_DYNAREC = 1
+
+# Classic Platforms ####################
+# Platform affix = classic_<ISA>_<µARCH>
+# Help at https://modmyclassic.com/comp
+
+# (armv7 a7, hard point, neon based) ### 
+# NESC, SNESC, C64 mini 
+else ifeq ($(platform), classic_armv7_a7)
+	TARGET := $(TARGET_NAME)_libretro.so
+	fpic := -fPIC
+    SHARED := -shared -Wl,--version-script=link.T  -Wl,--no-undefined -fPIC
+	CFLAGS += -Ofast \
+	-flto=4 -fwhole-program -fuse-linker-plugin \
+	-fdata-sections -ffunction-sections -Wl,--gc-sections \
+	-fno-stack-protector -fno-ident -fomit-frame-pointer \
+	-falign-functions=1 -falign-jumps=1 -falign-loops=1 \
+	-fno-unwind-tables -fno-asynchronous-unwind-tables -fno-unroll-loops \
+	-fmerge-all-constants -fno-math-errno \
+	-marm -mtune=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=hard
+	CXXFLAGS = $(CFLAGS) -std=gnu++11
+	CPPFLAGS += $(CFLAGS)
+	ASFLAGS += $(CFLAGS)
+	HAVE_NEON = 1
+	ARCH = arm
+	BUILTIN_GPU = neon
+	CPU_ARCH := arm
+	HAVE_DYNAREC = 1
+	CFLAGS += -DARM -DARM_ARCH
+	CFLAGS += -DARM_MEMORY_DYNAREC
+	ifeq ($(shell echo `$(CC) -dumpversion` "< 4.9" | bc -l), 1)
+	  CFLAGS += -march=armv7-a
+	else
+	  CFLAGS += -march=armv7ve
+	  # If gcc is 5.0 or later
+	  ifeq ($(shell echo `$(CC) -dumpversion` ">= 5" | bc -l), 1)
+	    LDFLAGS += -static-libgcc -static-libstdc++
+	  endif
+	endif
+#######################################
 
 # Xbox 360
 else ifeq ($(platform), xenon)
@@ -422,11 +472,13 @@ else
 all: $(TARGET)
 
 $(TARGET): $(OBJECTS)
+	@echo "** BUILDING $(TARGET) FOR PLATFORM $(platform) **"
 ifeq ($(STATIC_LINKING), 1)
 	$(AR) rcs $@ $(OBJECTS)
 else
 	$(CC) $(fpic) $(SHARED) $(INCFLAGS) $(OPTIMIZE) -o $@ $(OBJECTS) $(LIBM) $(LDFLAGS)
 endif
+	@echo "** BUILD SUCCESSFUL! GG NO RE **"
 
 cpu_threaded.o: cpu_threaded.c
 	$(CC) $(CFLAGS) -Wno-unused-variable -Wno-unused-label $(OPTIMIZE_SAFE) $(INCDIRS) -c -o $@ $<
